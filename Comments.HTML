@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comment Section</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #000;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .layout-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .video-panel {
+    flex: 1;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .video-panel video {
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+ .comment-section {
+  flex: 2;
+  overflow-y: auto;
+  background: #111;
+  padding: 16px;
+  position: relative;
+  font-size: 16px;
+}
+
+
+  .exit-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    background: transparent;
+    border: none;
+    color: red;
+    font-size: 24px;
+    cursor: pointer;
+  }
+
+ .comment-box {
+  border-bottom: 1px solid #333;
+  padding: 15px;
+  margin-bottom: 16px;
+  background-color: #1a1a1a;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(255, 255, 255, 0.05);
+  transition: background 0.3s;
+}
+
+.comment-box:hover {
+  background-color: #22222217;
+}
+
+
+  .comment-box.reply {
+    margin-left: 36px; /* ✅ Constant indent for all replies */
+    border-left: none;
+    padding-left: 0;
+    margin-top: 8px;
+  }
+
+  .load-more-container {
+    margin-left: 36px;
+  }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .profile-pic {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+  }
+
+ .comment-content {
+  font-size: 16px;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+
+  .reactions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .emoji, .diamond-icon {
+  cursor: pointer;
+  font-size: 18px;
+  transition: transform 0.2s, background-color 0.2s;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.emoji:hover, .diamond-icon:hover {
+  transform: scale(1.1);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+
+  .emoji, .diamond-icon {
+    cursor: pointer;
+    font-size: 18px;
+  }
+
+  .comment-input {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+  }
+
+  .comment-input input {
+    flex: 1;
+    padding: 10px;
+    font-size: 16px;
+    border-radius: 5px;
+    border: none;
+  }
+
+  .comment-input button {
+    padding: 10px;
+    background: red;
+    color: white;
+    border: none;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  .reply-button-container button {
+    background: transparent;
+    border: none;
+    color: #0af;
+    cursor: pointer;
+    padding: 5px 0;
+    font-size: 14px;
+  }
+
+  @media screen and (max-width: 768px) {
+    .emoji, .diamond-icon {
+      font-size: 24px;
+      padding: 6px;
+    }
+
+    .comment-input {
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .comment-input input,
+    .comment-input button {
+      font-size: 16px;
+      padding: 10px;
+      width: 100%;
+    }
+
+    .reply-button-container button {
+      font-size: 14px;
+    }
+
+    .load-more-container {
+      margin-left: 36px;
+    }
+  }
+
+  @media screen and (min-width: 768px) {
+    .layout-container {
+      flex-direction: row;
+    }
+
+    .video-panel {
+      flex: 2;
+    }
+
+    .comment-section {
+      flex: 1;
+    }
+  }
+</style>
+
+</head>
+<body>
+  <div class="layout-container">
+   <div class="video-panel">
+ <button class="exit-button" onclick="goToFullVideo()" aria-label="Back to full video">←</button>
+  <video id="commentVideo" controls autoplay muted></video>
+</div>
+
+
+    <div class="comment-section">
+<h2 id="commentCount">Comments (0)</h2>
+
+
+  <div id="commentsContainer">
+    <!-- Comments will load here -->
+  </div>
+</div>
+
+
+
+ <script>
+  const commentContainer = document.getElementById('commentsContainer');
+  const emojis = ['😂', '🔥', '❤️', '👍'];
+
+  let comments = [];
+  let activeReplyId = null;
+  let activeEditId = null;
+
+  window.onload = () => {
+    const savedComments = localStorage.getItem('comments');
+    comments = savedComments ? JSON.parse(savedComments) : [
+      {
+        id: 'c1',
+        username: 'Alice',
+        text: 'This video is awesome!',
+        diamonds: 1,
+        reactions: { '😂': 2 },
+        emojiUsers: {},
+        diamondUsers: {},
+        replies: [],
+        visibleReplies: 2
+      }
+    ];
+    renderComments();
+  };
+
+  function renderComments() {
+    document.getElementById('commentCount').textContent = `Comments (${comments.length})`;
+
+    const allCommentsHTML = comments.length
+      ? comments.map(comment => createCommentHTML(comment)).join('')
+      : '<p style="text-align:center; padding: 20px; color: #777;">No comments yet. Be the first!</p>';
+
+    commentContainer.innerHTML = `
+      <div class="comment-input">
+        <input type="text" id="mainCommentInput" placeholder="Add a comment..." aria-label="Comment input field">
+        <button onclick="addComment()" aria-label="Post your comment">Post</button>
+      </div>
+      ${allCommentsHTML}
+    `;
+  }
+
+  function createCommentHTML(comment, isReply = false) {
+    const visibleCount = comment.visibleReplies ?? 2;
+    const repliesToShow = comment.replies.slice(0, visibleCount);
+    const hasMoreReplies = comment.replies.length > visibleCount;
+
+    const emojiHTML = emojis.map(emoji => `
+      <span class="emoji" onclick="reactEmoji('${comment.id}', '${emoji}')" aria-label="React with ${emoji}" role="button" tabindex="0">
+        ${emoji} <span id="${comment.id}-emoji-${emoji}">${comment.reactions[emoji] || 0}</span>
+      </span>`).join('');
+
+    const repliesHTML = repliesToShow.map(reply => createCommentHTML(reply, true)).join('');
+
+    const loadMoreButton = hasMoreReplies ? `
+      <div class="load-more-container">
+        <button onclick="loadMoreReplies('${comment.id}')" aria-label="Load more replies">
+          Load more replies (${comment.replies.length - visibleCount})
+        </button>
+      </div>` : '';
+
+    return `
+      <div class="comment-box ${isReply ? 'reply' : ''}" id="comment-${comment.id}">
+        <div class="user-info">
+          <img src="https://i.pravatar.cc/40?u=${comment.id}" class="profile-pic">
+          <strong>${comment.username}</strong>
+        </div>
+
+        <div class="comment-content">
+          ${activeEditId === comment.id
+            ? `<input type="text" id="edit-${comment.id}" value="${comment.text}" />
+               <button onclick="saveEdit('${comment.id}')">Save</button>`
+            : comment.text}
+          ${!isReply && comment.replies.length > 0
+            ? `<div style="margin-top: 4px; font-size: 14px; color: #888;">
+                💬 ${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}
+               </div>` : ''}
+        </div>
+
+        <div class="reactions">
+          <div class="emojis">${emojiHTML}</div>
+          <div class="diamond">
+            <span class="diamond-icon" onclick="awardDiamond('${comment.id}')" aria-label="Award a diamond">💎</span>
+            <span id="${comment.id}-diamond">${comment.diamonds}</span>
+          </div>
+        </div>
+
+        <div class="reply-button-container">
+          <button onclick="showReplyInput('${comment.id}')">Reply</button>
+          <button onclick="showEditInput('${comment.id}')">Edit</button>
+          <button onclick="deleteComment('${comment.id}')">Delete</button>
+        </div>
+
+        ${activeReplyId === comment.id
+          ? `<div class="comment-input">
+              <input type="text" id="reply-${comment.id}" value="@${comment.username} " aria-label="Reply input">
+              <button onclick="addReply('${comment.id}')">Send</button>
+             </div>`
+          : ''}
+
+        ${repliesHTML}
+        ${loadMoreButton}
+      </div>
+    `;
+  }
+
+  function addComment() {
+    const input = document.getElementById('mainCommentInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    comments.unshift({
+      id: 'c' + Date.now(),
+      username: 'User' + Math.floor(Math.random() * 1000),
+      text,
+      diamonds: 0,
+      reactions: {},
+      emojiUsers: {},
+      diamondUsers: {},
+      replies: [],
+      visibleReplies: 2
+    });
+
+    input.value = '';
+    renderComments();
+    saveComments();
+  }
+
+  function addReply(parentId) {
+    const input = document.getElementById(`reply-${parentId}`);
+    const text = input?.value.trim();
+    if (!text) return;
+
+    const reply = {
+      id: parentId + '-r' + Date.now(),
+      username: 'User' + Math.floor(Math.random() * 1000),
+      text,
+      diamonds: 0,
+      reactions: {},
+      emojiUsers: {},
+      diamondUsers: {},
+      replies: [],
+      visibleReplies: 2
+    };
+
+    function insertReply(list) {
+      for (let item of list) {
+        if (item.id === parentId) {
+          item.replies.push(reply);
+          item.visibleReplies = item.replies.length;
+          return true;
+        }
+        if (insertReply(item.replies)) return true;
+      }
+      return false;
+    }
+
+    insertReply(comments);
+    activeReplyId = null;
+    renderComments();
+    saveComments();
+  }
+
+  function showReplyInput(id) {
+    activeReplyId = id;
+    activeEditId = null;
+    renderComments();
+  }
+
+  function showEditInput(id) {
+    activeEditId = id;
+    activeReplyId = null;
+    renderComments();
+  }
+
+  function saveEdit(id) {
+    const input = document.getElementById(`edit-${id}`);
+    const newText = input?.value.trim();
+    if (!newText) return;
+
+    function updateText(list) {
+      for (const item of list) {
+        if (item.id === id) {
+          item.text = newText;
+          return true;
+        }
+        if (updateText(item.replies)) return true;
+      }
+      return false;
+    }
+
+    updateText(comments);
+    activeEditId = null;
+    renderComments();
+    saveComments();
+  }
+
+  function deleteComment(id) {
+    const confirmed = confirm("Are you sure you want to delete this?");
+    if (!confirmed) return;
+
+    function deleteRecursive(list) {
+      const index = list.findIndex(item => item.id === id);
+      if (index !== -1) {
+        list.splice(index, 1);
+        return true;
+      }
+      for (const item of list) {
+        if (deleteRecursive(item.replies)) return true;
+      }
+      return false;
+    }
+
+    deleteRecursive(comments);
+    renderComments();
+    saveComments();
+  }
+
+  function awardDiamond(id) {
+    function addDiamond(list) {
+      for (const item of list) {
+        if (item.id === id && !item.diamondUsers['me']) {
+          item.diamonds++;
+          item.diamondUsers['me'] = true;
+          return true;
+        }
+        if (addDiamond(item.replies)) return true;
+      }
+      return false;
+    }
+
+    if (addDiamond(comments)) {
+      renderComments();
+      saveComments();
+    }
+  }
+
+  function reactEmoji(id, emoji) {
+    function addReaction(list) {
+      for (const item of list) {
+        if (item.id === id && !item.emojiUsers[emoji]) {
+          item.reactions[emoji] = (item.reactions[emoji] || 0) + 1;
+          item.emojiUsers[emoji] = true;
+          return true;
+        }
+        if (addReaction(item.replies)) return true;
+      }
+      return false;
+    }
+
+    if (addReaction(comments)) {
+      renderComments();
+      saveComments();
+    }
+  }
+
+  function loadMoreReplies(id) {
+    function expandReplies(list) {
+      for (let item of list) {
+        if (item.id === id) {
+          item.visibleReplies = (item.visibleReplies || 2) + 3;
+          return true;
+        }
+        if (expandReplies(item.replies)) return true;
+      }
+      return false;
+    }
+
+    if (expandReplies(comments)) {
+      renderComments();
+      saveComments();
+    }
+  }
+
+  function saveComments() {
+    localStorage.setItem('comments', JSON.stringify(comments));
+  }
+
+  function getQueryParam(key) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(key);
+  }
+
+  const videoId = getQueryParam("videoId");
+  const videoElement = document.getElementById("commentVideo");
+
+  if (videoId) {
+    videoElement.src = `videos/${videoId}`;
+  } else {
+    videoElement.outerHTML = `
+      <div style="color:#aaa; text-align:center; padding:20px;">
+        No video selected. Please return to the main page.
+      </div>`;
+  }
+
+  function goToFullVideo() {
+    window.location.href = "index.html";
+  }
+</script>
+
+</body>
+</html>
